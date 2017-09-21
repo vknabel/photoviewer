@@ -44,43 +44,55 @@
 
 - (void)show:(CDVInvokedUrlCommand*)command
 {
+    UIActivityIndicatorView *activityIndicator = [self createAndPresentActivityIndicator];
+    NSString* url = [command.arguments objectAtIndex:0];
+    NSString* title = [command.arguments objectAtIndex:1];
+
+    if (url != nil && [url isKindOfClass: [NSString class]] && [url length] > 0) {
+        [self.commandDelegate runInBackground:^{
+            self.documentURLs = [NSMutableArray array];
+
+            NSURL *URL = [self localFileURLForImage:url];
+
+            CDVPluginResult* pluginResult = nil;
+            if (URL) {
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+                [self.documentURLs addObject:URL];
+                [self setupDocumentControllerWithURL:URL andTitle:title];
+                [self hideActivityIndicator:activityIndicator andPresentPreview:true];
+            } else {
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
+                [self hideActivityIndicator:activityIndicator andPresentPreview:false];
+            }
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        }];
+    } else {
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    }
+}
+
+- (UIActivityIndicatorView *)createAndPresentActivityIndicator {
     UIActivityIndicatorView *activityIndicator = [[UIActivityIndicatorView alloc] initWithFrame:self.viewController.view.frame];
     [activityIndicator setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleWhiteLarge];
     [activityIndicator.layer setBackgroundColor:[[UIColor colorWithWhite:0.0 alpha:0.30] CGColor]];
     CGPoint center = self.viewController.view.center;
     activityIndicator.center = center;
     [self.viewController.view addSubview:activityIndicator];
-    
+
     [activityIndicator startAnimating];
-    
-    
-    CDVPluginResult* pluginResult = nil;
-    NSString* url = [command.arguments objectAtIndex:0];
-    NSString* title = [command.arguments objectAtIndex:1];
+    return activityIndicator;
+}
 
-    if (url != nil && [url length] > 0) {
-        [self.commandDelegate runInBackground:^{
-            self.documentURLs = [NSMutableArray array];
-
-            NSURL *URL = [self localFileURLForImage:url];
-
-            if (URL) {
-                [self.documentURLs addObject:URL];
-                [self setupDocumentControllerWithURL:URL andTitle:title];
-                double delayInSeconds = 0.1;
-                dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delayInSeconds * NSEC_PER_SEC);
-                dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
-                    [activityIndicator stopAnimating];
-                    [self.docInteractionController presentPreviewAnimated:YES];
-                });
-            }
-        }];
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-    } else {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
-    }
-
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+- (void)hideActivityIndicator:(UIActivityIndicatorView *)activityIndicator andPresentPreview:(BOOL)shouldPresentPreview {
+    double delayInSeconds = 0.1;
+    dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delayInSeconds * NSEC_PER_SEC);
+    dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+        [activityIndicator stopAnimating];
+        if (shouldPresentPreview) {
+            [self.docInteractionController presentPreviewAnimated:YES];
+        }
+    });
 }
 
 - (NSURL *)localFileURLForImage:(NSString *)image
